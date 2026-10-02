@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>聲萃 · 影片轉 MP3</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f2f5fa;color:#172b42;font:16px/1.6 system-ui,-apple-system,sans-serif;padding:32px 18px}main{max-width:620px;margin:6vh auto;background:white;border-radius:24px;padding:36px;box-shadow:0 14px 60px #16345412}.brand{color:#3875b8;font-weight:700;letter-spacing:2px}h1{font-size:clamp(26px,6vw,38px);line-height:1.25}p{color:#64748b}.upload{display:block;background:#f6f9fe;border:2px dashed #bbd0e7;border-radius:16px;padding:24px;margin:24px 0}input{display:block;width:100%;margin-top:14px}button,.download{display:block;width:100%;border:0;border-radius:12px;padding:15px;background:#2464ab;color:white;font:inherit;font-weight:650;text-align:center;text-decoration:none;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.download{background:#157c64;margin-top:16px}[hidden]{display:none!important}progress{width:100%;height:12px;accent-color:#2464ab}.spinner{display:inline-block;width:16px;height:16px;border:2px solid #c9d9ec;border-top-color:#2464ab;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:8px}@keyframes spin{to{transform:rotate(360deg)}}.note{font-size:13px}.error{color:#b42318}audio{width:100%;margin-top:16px}@media(max-width:480px){main{padding:24px;margin:18px auto}body{padding:16px}}
+  </style>
+</head>
+<body><main>
+  <div class="brand">聲萃 SOUND EXTRACT</div>
+  <h1>讓影片，變成隨身音頻。</h1>
+  <p>上傳你的影片，提取為 192 kbps MP3。無需安裝應用程式。</p>
+  <form id="form">
+    <label class="upload" for="video">選擇影片檔案 <span id="limit">（最大 50 MB）</span>
+      <input id="video" type="file" accept=".mp4,.mov,.mkv,.webm,.avi,.m4v" required>
+    </label>
+    <button id="convert" type="submit">轉換為 MP3</button>
+  </form>
+  <div id="loading" hidden><p><span class="spinner" aria-hidden="true"></span><span id="stage">正在上傳…</span></p><progress id="progress" max="100" value="0" aria-label="上傳進度"></progress></div>
+  <p id="status" role="status" aria-live="polite"></p>
+  <audio id="preview" controls hidden></audio>
+  <a id="download" class="download" hidden download="audio.mp3">下載音頻</a>
+  <p id="wechat" class="note" hidden>微信可能限制下載。請點右上角「⋯」→「在瀏覽器開啟」，再重新選擇影片轉換。iPhone 亦可嘗試音頻頁面的分享／儲存到檔案。</p>
+  <p class="note">僅處理你有權使用的影片。音頻最多提取 60 分鐘；伺服器傳送後會刪除暫存檔，不提供永久保存。</p>
+</main><script>
+  const $ = id => document.getElementById(id);
+  let blobUrl = null, maxMB = 50;
+  $('wechat').hidden = !/MicroMessenger/i.test(navigator.userAgent);
+  fetch('/health').then(r=>r.json()).then(d=>{maxMB=d.max_upload_mb;$('limit').textContent=`（最大 ${maxMB} MB）`;}).catch(()=>{});
+  $('form').addEventListener('submit', event => {
+    event.preventDefault();
+    const file = $('video').files[0];
+    $('status').className='';$('status').textContent='';
+    if(!file)return;
+    if(file.size>maxMB*1024*1024){$('status').className='error';$('status').textContent=`影片不可超過 ${maxMB} MB。`;return;}
+    if(blobUrl){URL.revokeObjectURL(blobUrl);blobUrl=null;}
+    $('download').hidden=true;$('preview').hidden=true;$('preview').removeAttribute('src');
+    $('loading').hidden=false;$('convert').disabled=true;$('video').disabled=true;
+    $('stage').textContent='正在上傳…';$('progress').value=0;
+    const data=new FormData();data.append('file',file);
+    const xhr=new XMLHttpRequest();xhr.open('POST','/api/convert');xhr.responseType='blob';xhr.timeout=240000;
+    xhr.upload.onprogress=e=>{if(e.lengthComputable)$('progress').value=e.loaded/e.total*100;};
+    xhr.upload.onload=()=>{$('stage').textContent='正在提取音頻及接收結果，請稍候…';$('progress').removeAttribute('value');};
+    const finish=()=>{$('loading').hidden=true;$('convert').disabled=false;$('video').disabled=false;};
+    const fail=message=>{$('status').className='error';$('status').textContent=message;finish();};
+    xhr.onload=async()=>{
+      if(xhr.status!==200){let message='轉換失敗，請稍後再試。';try{message=JSON.parse(await xhr.response.text()).detail||message;}catch{}fail(message);return;}
+      blobUrl=URL.createObjectURL(xhr.response);$('preview').src=blobUrl;$('preview').hidden=false;
+      $('download').href=blobUrl;$('download').download=(file.name.replace(/\.[^.]+$/,'')||'audio')+'.mp3';$('download').hidden=false;
+      $('status').textContent='轉換完成！請下載音頻，關閉或重新整理頁面後結果會消失。';finish();
+    };
+    xhr.onerror=()=>fail('網路中斷，請檢查連線後重試。');xhr.ontimeout=()=>fail('請求逾時，請使用較小的影片重試。');xhr.send(data);
+  });
+  window.addEventListener('pagehide',()=>{if(blobUrl)URL.revokeObjectURL(blobUrl);});
+</script></body></html>

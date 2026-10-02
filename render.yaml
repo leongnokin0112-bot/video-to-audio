@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: video-to-audio
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: MAX_UPLOAD_MB
+        value: "50"
+      - key: CONVERT_TIMEOUT_SECONDS
+        value: "180"
+      - key: TEMP_TTL_SECONDS
+        value: "3600"
